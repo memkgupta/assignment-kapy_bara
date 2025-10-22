@@ -5,7 +5,7 @@ import PostCardHorizontal from "../posts/PostCardHorizontal";
 export default async function AllPosts({
   searchParams,
 }: {
-  searchParams: { page?: string };
+  searchParams: { page: number; search?: string; categories?: string[] };
 }) {
   const page = Number(searchParams.page ?? 1);
   const limit = 9;
@@ -13,6 +13,8 @@ export default async function AllPosts({
   const { posts, prev, next } = await serverClient.posts.all({
     page,
     limit,
+    search: searchParams.search,
+    categories: Array.from(searchParams.categories ?? []),
   });
 
   return (

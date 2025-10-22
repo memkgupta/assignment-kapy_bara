@@ -84,42 +84,64 @@ export default async function Dashboard({
             </Link>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {posts.map(({ post }) => (
-              <div
-                key={post.id}
-                className="bg-white dark:bg-gray-800 p-5 rounded-lg shadow-md hover:shadow-lg transition-shadow"
-              >
-                <div className="flex justify-between items-start">
-                  <div>
-                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+          <div className="overflow-x-auto rounded-lg border border-border/40">
+            <table className="w-full text-sm text-left">
+              <thead className="bg-muted/50 text-muted-foreground uppercase text-xs">
+                <tr>
+                  <th className="px-4 py-3 font-medium">Title</th>
+                  <th className="px-4 py-3 font-medium">Description</th>
+                  <th className="px-4 py-3 font-medium">Status</th>
+                  <th className="px-4 py-3 font-medium text-center">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {posts.map(({ post }) => (
+                  <tr
+                    key={post.id}
+                    className="border-t border-border/40 hover:bg-muted/30 transition-colors"
+                  >
+                    <td className="px-4 py-3 font-medium text-gray-900 dark:text-gray-100">
                       {post.title}
-                    </h3>
-                    <p className="text-gray-500 dark:text-gray-400 text-sm line-clamp-2 mt-1 break-words whitespace-normal">
+                    </td>
+                    <td className="px-4 py-3 text-gray-600 dark:text-gray-400 max-w-md truncate">
                       {post.description?.slice(0, 100) ||
                         "No description available"}
-                    </p>
-                  </div>
-                  <div className="flex gap-2">
-                    <Link href={`/dashboard/posts/${post.slug}/edit`}>
-                      <Button variant="outline" size="icon">
-                        <Pencil className="w-4 h-4" />
-                      </Button>
-                    </Link>
-                    <Button variant="destructive" size="icon">
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
-                  </div>
-                </div>
-                <p
-                  className={`mt-3 text-sm ${
-                    post.published ? "text-green-500" : "text-yellow-500"
-                  }`}
-                >
-                  {post.published ? "Published" : "Draft"}
-                </p>
-              </div>
-            ))}
+                    </td>
+                    <td className="px-4 py-3">
+                      <span
+                        className={`px-2 py-1 text-xs rounded-full font-medium ${
+                          post.published
+                            ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                            : "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400"
+                        }`}
+                      >
+                        {post.published ? "Published" : "Draft"}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      <div className="flex items-center justify-center gap-2">
+                        <Link href={`/dashboard/posts/${post.slug}/edit`}>
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            className="h-8 w-8"
+                          >
+                            <Pencil className="w-4 h-4" />
+                          </Button>
+                        </Link>
+                        <Button
+                          variant="destructive"
+                          size="icon"
+                          className="h-8 w-8"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
       </div>

@@ -17,14 +17,12 @@ import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { useState } from "react";
 import ImageSelector from "../common/image-selector/ImageSelector";
-import { TRPCClientError } from "@trpc/client";
+import { toast } from "sonner";
 import { trpc } from "@/app/_trpc/client";
 import { useRouter } from "next/navigation";
-import { toast } from "sonner";
+import { useMutation } from "@tanstack/react-query";
 import { CategorySelector } from "./CategorySelector";
 import { Category, selectCategorySchema } from "@/db/schema/categories";
-import { serverClient } from "@/app/_trpc/server_client";
-import { useMutation } from "@tanstack/react-query";
 
 export const CreatePostForm = ({ categories }: { categories: Category[] }) => {
   const formSchema = createPostSchema.extend({
@@ -43,10 +41,13 @@ export const CreatePostForm = ({ categories }: { categories: Category[] }) => {
       description: "",
       slug: "",
       content: "",
+      categories: [],
     },
   });
+
   const router = useRouter();
-  const [submitting, setIsSubmitting] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+
   const createPostMutation = useMutation(
     trpc.posts.create.mutationOptions({
       onSuccess: (data) => {
@@ -55,29 +56,83 @@ export const CreatePostForm = ({ categories }: { categories: Category[] }) => {
           router.replace(`/dashboard/posts/${data?.slug}`);
         }
       },
-      onError: (data) => {
-        const message = data.shape?.message ?? "Something went wrong";
-        toast.error(message);
+      onError: (err) => {
+        toast.error(err.shape?.message ?? "Something went wrong");
+      },
+    }),
+  );
+
+  // 📝 Separate draft saving handler
+  const saveDraftMutation = useMutation(
+    trpc.posts.create.mutationOptions({
+      onSuccess: (data) => {
+        toast.success("Draft saved successfully");
+        router.replace(`/dashboard/posts/${data?.slug}`);
+      },
+      onError: (err) => {
+        toast.error(err.shape?.message ?? "Failed to save draft");
       },
     }),
   );
 
   async function onSubmit(data: z.infer<typeof formSchema>) {
-    await createPostMutation.mutateAsync({
-      content: data.content,
-      title: data.title,
-      slug: data.slug ?? "",
-      banner: data.banner,
-      thumbnail: data.thumbnail,
-    });
+    setSubmitting(true);
+    try {
+      await createPostMutation.mutateAsync({
+        content: data.content,
+        slug: data.slug ?? "",
+        categories: data.categories,
+        title: data.title,
+        banner: data.banner,
+        description: data.description,
+        thumbnail: data.thumbnail,
+        published: true,
+      });
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function onSaveDraft() {
+    const values = form.getValues();
+    setSubmitting(true);
+    try {
+      await saveDraftMutation.mutateAsync({
+        content: values.content,
+        slug: values.slug ?? "",
+        title: values.title,
+        categories: values.categories,
+        banner: values.banner,
+        description: values.description,
+        thumbnail: values.thumbnail,
+        published: false,
+      });
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   return (
     <Card className="mx-auto w-full max-w-5xl shadow-lg border border-gray-200 dark:border-gray-800 bg-background p-4 sm:p-6 md:p-8 rounded-2xl">
-      <CardHeader className="pb-4 border-b border-border/50">
-        <CardTitle className="text-3xl font-semibold text-center">
+      <CardHeader className="pb-4 border-b border-border/50 flex justify-between items-center">
+        <CardTitle className="text-3xl font-semibold">
           ✏️ Create a New Post
         </CardTitle>
+
+        {/* 🟡 Buttons in header */}
+        <div className="flex gap-3">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={onSaveDraft}
+            disabled={submitting}
+          >
+            {submitting ? "Saving..." : "Save Draft"}
+          </Button>
+          <Button form="create-post-form" type="submit" disabled={submitting}>
+            {submitting ? "Publishing..." : "Publish Post"}
+          </Button>
+        </div>
       </CardHeader>
 
       <CardContent className="pt-6">
@@ -87,7 +142,6 @@ export const CreatePostForm = ({ categories }: { categories: Category[] }) => {
           className="space-y-10"
         >
           <FieldGroup className="space-y-8">
-            {/* Top Section */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
               {/* Left Section */}
               <div className="flex flex-col gap-6">
@@ -100,19 +154,13 @@ export const CreatePostForm = ({ categories }: { categories: Category[] }) => {
                       data-invalid={fieldState.invalid}
                       className="space-y-2"
                     >
-                      <FieldLabel
-                        htmlFor="form-title"
-                        className="text-sm font-semibold text-muted-foreground"
-                      >
+                      <FieldLabel className="text-sm font-semibold text-muted-foreground">
                         Post Title
                       </FieldLabel>
                       <Input
                         {...field}
-                        id="form-title"
-                        aria-invalid={fieldState.invalid}
-                        placeholder="Enter a catchy title for your post"
-                        autoComplete="off"
-                        className="text-lg font-medium focus:ring-2 focus:ring-primary/50 focus:border-primary border border-gray-300 dark:border-gray-700"
+                        placeholder="Enter post title"
+                        className="text-lg font-medium border border-gray-300 dark:border-gray-700 focus:ring-2 focus:ring-primary/50"
                       />
                       {fieldState.invalid && (
                         <FieldError errors={[fieldState.error]} />
@@ -125,28 +173,16 @@ export const CreatePostForm = ({ categories }: { categories: Category[] }) => {
                 <Controller
                   name="slug"
                   control={form.control}
-                  render={({ field, fieldState }) => (
-                    <Field
-                      data-invalid={fieldState.invalid}
-                      className="space-y-2"
-                    >
-                      <FieldLabel
-                        htmlFor="form-slug"
-                        className="text-sm font-semibold text-muted-foreground"
-                      >
+                  render={({ field }) => (
+                    <Field className="space-y-2">
+                      <FieldLabel className="text-sm font-semibold text-muted-foreground">
                         Post Slug
                       </FieldLabel>
                       <Input
                         {...field}
-                        id="form-slug"
-                        value={field.value ?? ""}
-                        aria-invalid={fieldState.invalid}
-                        placeholder="Unique slug for the post (optional)"
-                        className="focus:ring-2 focus:ring-primary/50 focus:border-primary border border-gray-300 dark:border-gray-700"
+                        placeholder="Unique slug (optional)"
+                        className="border border-gray-300 dark:border-gray-700 focus:ring-2 focus:ring-primary/50"
                       />
-                      {fieldState.invalid && (
-                        <FieldError errors={[fieldState.error]} />
-                      )}
                     </Field>
                   )}
                 />
@@ -156,23 +192,15 @@ export const CreatePostForm = ({ categories }: { categories: Category[] }) => {
                   name="description"
                   control={form.control}
                   render={({ field, fieldState }) => (
-                    <Field
-                      data-invalid={fieldState.invalid}
-                      className="space-y-2"
-                    >
-                      <FieldLabel
-                        htmlFor="form-description"
-                        className="text-sm font-semibold text-muted-foreground"
-                      >
-                        Post Description
+                    <Field className="space-y-2">
+                      <FieldLabel className="text-sm font-semibold text-muted-foreground">
+                        Description
                       </FieldLabel>
                       <Textarea
                         {...field}
-                        id="form-description"
-                        value={field.value ?? ""}
-                        placeholder="Brief summary of your post..."
+                        placeholder="Short summary..."
                         rows={5}
-                        className="resize-none focus:ring-2 focus:ring-primary/50 focus:border-primary border border-gray-300 dark:border-gray-700"
+                        className="resize-none border border-gray-300 dark:border-gray-700 focus:ring-2 focus:ring-primary/50"
                       />
                       {fieldState.invalid && (
                         <FieldError errors={[fieldState.error]} />
@@ -180,6 +208,8 @@ export const CreatePostForm = ({ categories }: { categories: Category[] }) => {
                     </Field>
                   )}
                 />
+
+                {/* Categories */}
                 <Controller
                   name="categories"
                   control={form.control}
@@ -188,19 +218,22 @@ export const CreatePostForm = ({ categories }: { categories: Category[] }) => {
                       <FieldLabel className="text-sm font-semibold text-muted-foreground">
                         Categories
                       </FieldLabel>
-
                       <CategorySelector
-                        categories={categories} // fetched from your server
-                        selected={field.value || []}
-                        onChange={(newValue) => field.onChange(newValue)}
+                        categories={categories}
+                        selected={field.value}
+                        onChange={(val) => {
+                          form.setValue("categories", val);
+                        }}
+                        preview
                       />
                     </Field>
                   )}
                 />
               </div>
 
-              {/* Right Section: Image Uploads */}
+              {/* Right Section */}
               <div className="flex flex-col gap-6">
+                {/* Thumbnail */}
                 <Controller
                   name="thumbnail"
                   control={form.control}
@@ -209,22 +242,21 @@ export const CreatePostForm = ({ categories }: { categories: Category[] }) => {
                       <FieldLabel className="text-sm font-semibold text-muted-foreground">
                         Post Thumbnail
                       </FieldLabel>
-                      <div className="border border-dashed border-gray-400 dark:border-gray-700 rounded-xl p-4 flex items-center justify-center bg-muted/5 hover:bg-muted/10 transition">
-                        <ImageSelector
-                          maxFiles={1}
-                          gridCols={1}
-                          crop={{ shape: "rect", width: 200, height: 200 }}
-                          onChange={async (img) => {
-                            field.onChange(img.url);
-                            return img;
-                          }}
-                          onRemove={async () => field.onChange(undefined)}
-                        />
-                      </div>
+                      <ImageSelector
+                        maxFiles={1}
+                        gridCols={1}
+                        crop={{ shape: "rect", width: 200, height: 200 }}
+                        onChange={async (img) => {
+                          field.onChange(img.url);
+                          return img;
+                        }}
+                        onRemove={async () => field.onChange(undefined)}
+                      />
                     </Field>
                   )}
                 />
 
+                {/* Banner */}
                 <Controller
                   name="banner"
                   control={form.control}
@@ -233,24 +265,21 @@ export const CreatePostForm = ({ categories }: { categories: Category[] }) => {
                       <FieldLabel className="text-sm font-semibold text-muted-foreground">
                         Post Banner
                       </FieldLabel>
-                      <div className="border border-dashed border-gray-400 dark:border-gray-700 rounded-xl p-4 flex items-center justify-center bg-muted/5 hover:bg-muted/10 transition">
-                        <ImageSelector
-                          maxFiles={1}
-                          gridCols={1}
-                          crop={{ shape: "rect", width: 600, height: 300 }}
-                          onChange={async (img) => {
-                            field.onChange(img.url);
-                            return img;
-                          }}
-                          onRemove={async () => field.onChange(undefined)}
-                        />
-                      </div>
+                      <ImageSelector
+                        maxFiles={1}
+                        gridCols={1}
+                        crop={{ shape: "rect", width: 600, height: 300 }}
+                        onChange={async (img) => {
+                          field.onChange(img.url);
+                          return img;
+                        }}
+                        onRemove={async () => field.onChange(undefined)}
+                      />
                     </Field>
                   )}
                 />
               </div>
             </div>
-
             {/* Markdown Editor */}
             <div className="space-y-4">
               <FieldLabel className="text-sm font-semibold text-muted-foreground">
@@ -264,17 +293,6 @@ export const CreatePostForm = ({ categories }: { categories: Category[] }) => {
               </div>
             </div>
           </FieldGroup>
-
-          {/* Submit Button */}
-          <div className="pt-6 flex flex-col sm:flex-row justify-end">
-            <Button
-              type="submit"
-              disabled={submitting}
-              className="w-full sm:w-auto px-8 py-2 text-base font-medium rounded-md shadow-sm hover:shadow-md transition-all"
-            >
-              {submitting ? "Uploading..." : "Publish Post"}
-            </Button>
-          </div>
         </form>
       </CardContent>
     </Card>

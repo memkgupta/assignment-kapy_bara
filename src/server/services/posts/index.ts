@@ -1,24 +1,24 @@
 import db from "@/db";
-import { categories } from "@/db/schema/categories";
-import { CreatePostType, posts } from "@/db/schema/post";
+import { categories, Category } from "@/db/schema/categories";
+import { CreatePostType, Post, posts } from "@/db/schema/post";
 import { postCategories } from "@/db/schema/postCategories";
 import { handleDBError } from "@/server/utils/errors/handleDBError";
 import { PostWithCategories } from "@/types/posts";
 import { TRPCError } from "@trpc/server";
 
-import { lt, desc, eq, ilike, lte, and } from "drizzle-orm";
+import { lt, desc, eq, ilike, lte, and, inArray } from "drizzle-orm";
 import { z } from "zod/v4";
 
 export const getPosts = async (filters: {
   search?: string;
   page: number;
   limit: number;
+  categories?: string[];
 }) => {
   const { search, page, limit } = filters;
   const realLimit = limit + 1;
   let cursorCreatedAt: Date | null = null;
 
-  // Fix 1: Cursor logic is broken - simplified approach
   if (page > 1) {
     const offset = (page - 1) * limit;
     const prevCursorQuery = await db
@@ -43,7 +43,6 @@ export const getPosts = async (filters: {
     whereConditions.push(lt(posts.createdAt, cursorCreatedAt));
   }
 
-  // Fix 2: Build query properly
   let baseQuery = db
     .select()
     .from(posts)
@@ -52,17 +51,18 @@ export const getPosts = async (filters: {
     .orderBy(desc(posts.createdAt))
     .limit(realLimit);
 
-  // Fix 3: Apply where conditions
+  if (filters.categories && filters.categories.length > 0) {
+    whereConditions.push(inArray(categories.slug, filters.categories));
+  }
   if (whereConditions.length > 0) {
     baseQuery = baseQuery.where(and(...whereConditions)) as any;
   }
 
   const result = await baseQuery;
 
-  // Fix 4: Handle null createdAt
   const postMap = new Map<
     string,
-    { post: any; categories: { name: string; slug: string }[] }
+    { post: any; categories: { id: number; name: string; slug: string }[] }
   >();
 
   result?.forEach((row) => {
@@ -71,6 +71,7 @@ export const getPosts = async (filters: {
     }
     if (row.categories?.id) {
       postMap.get(row.posts.id)?.categories.push({
+        id: row.categories.id,
         name: row.categories.name,
         slug: row.categories.slug,
       });
@@ -95,22 +96,92 @@ export const getPosts = async (filters: {
     next,
   };
 };
-export const createPost = async (data: CreatePostType) => {
+export const createPost = async (
+  data: CreatePostType & { categories: Category[] },
+) => {
   try {
-    const [post] = await db.insert(posts).values(data).returning();
-    return post;
+    return await db.transaction(async (tx) => {
+      // Insert the post
+      const [post] = await tx.insert(posts).values(data).returning();
+      const categ_slugs = data.categories.map((c) => c.slug);
+
+      // Get category IDs from slugs
+      const categs = await tx
+        .select()
+        .from(categories)
+        .where(inArray(categories.slug, categ_slugs));
+
+      // Insert post-category relations
+      if (categs.length > 0) {
+        await tx
+          .insert(postCategories)
+          .values(categs.map((c) => ({ postId: post.id, categoryId: c.id })));
+      }
+
+      return post;
+    });
   } catch (error: any) {
-    handleDBError(error);
+    if (error.code) handleDBError(error);
+    else
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Something went wrong",
+      });
   }
 };
-export const updatePost = async (data: CreatePostType) => {
+export const updatePost = async (
+  data: Partial<Post> & { categories?: Category[] },
+) => {
   try {
-    const updated = await db
-      .update(posts)
-      .set(data)
-      .where(eq(posts.id, data.id as string))
-      .returning();
-    return updated;
+    await db.transaction(async (tx) => {
+      const [updated] = await tx
+        .update(posts)
+        .set(data)
+        .where(eq(posts.id, data.id!))
+        .returning();
+
+      if (data.categories) {
+        const oldCategs = await tx
+          .select()
+          .from(postCategories)
+          .where(eq(postCategories.postId, data.id!))
+          .leftJoin(categories, eq(categories.id, postCategories.categoryId));
+
+        const oldSlugs = oldCategs
+          .map((c) => c.categories?.slug)
+          .filter(Boolean) as string[];
+        const nSlugs = data.categories.map((c) => c.slug);
+        const toAdd = data.categories
+          .filter((categ) => !oldSlugs.includes(categ.slug))
+          .map((c) => c.slug);
+        const toDelete = oldCategs.filter(
+          (c) => c.categories && !nSlugs.includes(c.categories.slug),
+        );
+
+        const n_categs = await tx
+          .select()
+          .from(categories)
+          .where(inArray(categories.slug, toAdd));
+
+        await tx.delete(postCategories).where(
+          and(
+            eq(postCategories.postId, updated.id),
+            inArray(
+              postCategories.categoryId,
+              toDelete.map((t) => t.categories!.id),
+            ),
+          ),
+        );
+
+        await tx
+          .insert(postCategories)
+          .values(
+            n_categs.map((c) => ({ postId: updated.id, categoryId: c.id })),
+          );
+      }
+
+      return updated;
+    });
   } catch (error: any) {
     if (error.code) {
       handleDBError(error);
@@ -135,6 +206,7 @@ export const getBySlug = async (slug: string) => {
     (row) =>
       row.categories?.id &&
       post.categories.push({
+        id: row.categories.id,
         name: row.categories.name,
         slug: row.categories.slug,
       }),

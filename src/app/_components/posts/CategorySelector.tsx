@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/popover";
 import { Badge } from "@/components/ui/badge";
 import { Check, ChevronsUpDown, X } from "lucide-react";
-
+import { useState, useEffect } from "react";
 type Category = {
   id: number;
   name: string;
@@ -26,20 +26,22 @@ type Category = {
 
 interface CategorySelectorProps {
   categories: Category[];
+  preview?: boolean;
   selected: Category[];
   onChange: (selected: Category[]) => void;
 }
 
 export function CategorySelector({
   categories,
+  preview,
   selected,
   onChange,
 }: CategorySelectorProps) {
   const [open, setOpen] = React.useState(false);
 
   const toggleCategory = (category: Category) => {
-    if (selected.find((s) => s.id === category.id)) {
-      onChange(selected.filter((s) => s.id !== category.id));
+    if (selected.find((s) => s.slug === category.slug)) {
+      onChange(selected.filter((s) => s.slug !== category.slug));
     } else {
       onChange([...selected, category]);
     }

@@ -5,13 +5,14 @@ import { serverClient } from "../_trpc/server_client";
 export default async function Page({
   searchParams,
 }: {
-  searchParams: { page?: string };
+  searchParams: Promise<{ page?: string }>;
 }) {
-  console.log(await searchParams);
+  const { page } = await searchParams;
+  const filters = {};
   return (
     <>
       <RecentPosts />
-      <AllPosts searchParams={searchParams} />
+      <AllPosts searchParams={{ page: Number(page ?? 1) }} />
     </>
   );
 }

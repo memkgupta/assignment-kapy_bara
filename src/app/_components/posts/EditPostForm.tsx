@@ -17,18 +17,15 @@ import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { useState } from "react";
 import ImageSelector from "../common/image-selector/ImageSelector";
-import { TRPCClientError } from "@trpc/client";
-import { trpc } from "@/app/_trpc/client";
-import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { PostWithCategories } from "@/types/posts";
-import {
-  Category,
-  createCategorySchema,
-  selectCategorySchema,
-} from "@/db/schema/categories";
+import { Category, selectCategorySchema } from "@/db/schema/categories";
 import { CategorySelector } from "./CategorySelector";
 import { useMutation } from "@tanstack/react-query";
+import { trpc } from "@/app/_trpc/client";
+import { Switch } from "@/components/ui/switch";
+import { useRouter } from "next/navigation";
+import { cryptoRandomId } from "../common/image-selector/utils";
 
 export const EditPostForm = ({
   data,
@@ -45,6 +42,7 @@ export const EditPostForm = ({
     slug: z.string().min(20).optional(),
     thumbnail: z.string().optional(),
     banner: z.string().optional(),
+    published: z.boolean(),
     categories: z.array(selectCategorySchema).min(1),
   });
 
@@ -58,35 +56,39 @@ export const EditPostForm = ({
       description: post.description ?? undefined,
       content: post.content,
       slug: post.slug,
+      published: post.published ?? false,
     },
   });
+
   const router = useRouter();
   const [submitting, setIsSubmitting] = useState(false);
-  const createPostMutation = useMutation(
+
+  const updatePostMutation = useMutation(
     trpc.posts.update.mutationOptions({
       onSuccess: (data) => {
-        if (data) {
-          toast.success("Blog post updated");
-        }
+        toast.success("Post saved successfully");
+        router.refresh();
       },
-      onError: (data) => {
-        const message = data.shape?.message ?? "Something went wrong";
-        toast.error(message);
+      onError: (err) => {
+        toast.error(err.shape?.message ?? "Failed to save post");
       },
     }),
   );
+
   async function onSubmit(data: z.infer<typeof formSchema>) {
     setIsSubmitting(true);
-    await createPostMutation.mutateAsync({
+    await updatePostMutation.mutateAsync({
       id: post.id,
       content: data.content,
       title: data.title,
-      description: data.description,
+      categories: data.categories,
+      description: data.description ?? "",
       slug: data.slug ?? "",
-      banner: data.banner,
-      thumbnail: data.thumbnail,
-    });
+      banner: data.banner ?? null,
+      thumbnail: data.thumbnail ?? null,
 
+      published: data.published,
+    });
     setIsSubmitting(false);
   }
 
@@ -94,18 +96,17 @@ export const EditPostForm = ({
     <Card className="mx-auto w-full max-w-5xl shadow-lg border border-gray-200 dark:border-gray-800 bg-background p-4 sm:p-6 md:p-8 rounded-2xl">
       <CardHeader className="pb-4 border-b border-border/50">
         <CardTitle className="text-3xl font-semibold text-center">
-          ✏️ Update Post
+          ✏️ Edit Post
         </CardTitle>
       </CardHeader>
 
       <CardContent className="pt-6">
         <form
-          id="create-post-form"
+          id="edit-post-form"
           onSubmit={form.handleSubmit(onSubmit)}
           className="space-y-10"
         >
           <FieldGroup className="space-y-8">
-            {/* Top Section */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
               {/* Left Section */}
               <div className="flex flex-col gap-6">
@@ -118,19 +119,13 @@ export const EditPostForm = ({
                       data-invalid={fieldState.invalid}
                       className="space-y-2"
                     >
-                      <FieldLabel
-                        htmlFor="form-title"
-                        className="text-sm font-semibold text-muted-foreground"
-                      >
+                      <FieldLabel className="text-sm font-semibold text-muted-foreground">
                         Post Title
                       </FieldLabel>
                       <Input
                         {...field}
-                        id="form-title"
-                        aria-invalid={fieldState.invalid}
-                        placeholder="Enter a catchy title for your post"
-                        autoComplete="off"
-                        className="text-lg font-medium focus:ring-2 focus:ring-primary/50 focus:border-primary border border-gray-300 dark:border-gray-700"
+                        placeholder="Enter post title"
+                        className="text-lg font-medium border border-gray-300 dark:border-gray-700 focus:ring-2 focus:ring-primary/50"
                       />
                       {fieldState.invalid && (
                         <FieldError errors={[fieldState.error]} />
@@ -143,28 +138,16 @@ export const EditPostForm = ({
                 <Controller
                   name="slug"
                   control={form.control}
-                  render={({ field, fieldState }) => (
-                    <Field
-                      data-invalid={fieldState.invalid}
-                      className="space-y-2"
-                    >
-                      <FieldLabel
-                        htmlFor="form-slug"
-                        className="text-sm font-semibold text-muted-foreground"
-                      >
+                  render={({ field }) => (
+                    <Field className="space-y-2">
+                      <FieldLabel className="text-sm font-semibold text-muted-foreground">
                         Post Slug
                       </FieldLabel>
                       <Input
                         {...field}
-                        id="form-slug"
-                        value={field.value ?? ""}
-                        aria-invalid={fieldState.invalid}
-                        placeholder="Unique slug for the post (optional)"
-                        className="focus:ring-2 focus:ring-primary/50 focus:border-primary border border-gray-300 dark:border-gray-700"
+                        placeholder="Unique slug (optional)"
+                        className="border border-gray-300 dark:border-gray-700 focus:ring-2 focus:ring-primary/50"
                       />
-                      {fieldState.invalid && (
-                        <FieldError errors={[fieldState.error]} />
-                      )}
                     </Field>
                   )}
                 />
@@ -174,23 +157,15 @@ export const EditPostForm = ({
                   name="description"
                   control={form.control}
                   render={({ field, fieldState }) => (
-                    <Field
-                      data-invalid={fieldState.invalid}
-                      className="space-y-2"
-                    >
-                      <FieldLabel
-                        htmlFor="form-description"
-                        className="text-sm font-semibold text-muted-foreground"
-                      >
-                        Post Description
+                    <Field className="space-y-2">
+                      <FieldLabel className="text-sm font-semibold text-muted-foreground">
+                        Description
                       </FieldLabel>
                       <Textarea
                         {...field}
-                        id="form-description"
-                        value={field.value ?? ""}
-                        placeholder="Brief summary of your post..."
+                        placeholder="Short summary..."
                         rows={5}
-                        className="resize-none focus:ring-2 focus:ring-primary/50 focus:border-primary border border-gray-300 dark:border-gray-700"
+                        className="resize-none border border-gray-300 dark:border-gray-700 focus:ring-2 focus:ring-primary/50"
                       />
                       {fieldState.invalid && (
                         <FieldError errors={[fieldState.error]} />
@@ -198,6 +173,8 @@ export const EditPostForm = ({
                     </Field>
                   )}
                 />
+
+                {/* Categories */}
                 <Controller
                   name="categories"
                   control={form.control}
@@ -206,19 +183,43 @@ export const EditPostForm = ({
                       <FieldLabel className="text-sm font-semibold text-muted-foreground">
                         Categories
                       </FieldLabel>
-
                       <CategorySelector
-                        categories={allCategs} // fetched from your server
-                        selected={field.value || []}
-                        onChange={(newValue) => field.onChange(newValue)}
+                        categories={allCategs}
+                        selected={field.value}
+                        onChange={(val) => {
+                          form.setValue("categories", val);
+                        }}
+                        preview
                       />
                     </Field>
                   )}
                 />
+
+                {/* Publish Toggle */}
+                <Controller
+                  name="published"
+                  control={form.control}
+                  render={({ field }) => (
+                    <div className="flex items-center gap-3 pt-2">
+                      <Switch
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                        id="publish-toggle"
+                      />
+                      <label
+                        htmlFor="publish-toggle"
+                        className="text-sm font-medium text-muted-foreground"
+                      >
+                        {field.value ? "Published" : "Draft"}
+                      </label>
+                    </div>
+                  )}
+                />
               </div>
 
-              {/* Right Section: Image Uploads */}
+              {/* Right Section */}
               <div className="flex flex-col gap-6">
+                {/* Thumbnail */}
                 <Controller
                   name="thumbnail"
                   control={form.control}
@@ -227,22 +228,26 @@ export const EditPostForm = ({
                       <FieldLabel className="text-sm font-semibold text-muted-foreground">
                         Post Thumbnail
                       </FieldLabel>
-                      <div className="border border-dashed border-gray-400 dark:border-gray-700 rounded-xl p-4 flex items-center justify-center bg-muted/5 hover:bg-muted/10 transition">
-                        <ImageSelector
-                          maxFiles={1}
-                          gridCols={1}
-                          crop={{ shape: "rect", width: 200, height: 200 }}
-                          onChange={async (img) => {
-                            field.onChange(img.url);
-                            return img;
-                          }}
-                          onRemove={async () => field.onChange(undefined)}
-                        />
-                      </div>
+                      <ImageSelector
+                        maxFiles={1}
+                        value={
+                          field.value
+                            ? [{ local_id: cryptoRandomId(), url: field.value }]
+                            : undefined
+                        }
+                        gridCols={1}
+                        crop={{ shape: "rect", width: 200, height: 200 }}
+                        onChange={async (img) => {
+                          field.onChange(img.url);
+                          return img;
+                        }}
+                        onRemove={async () => field.onChange(undefined)}
+                      />
                     </Field>
                   )}
                 />
 
+                {/* Banner */}
                 <Controller
                   name="banner"
                   control={form.control}
@@ -251,18 +256,21 @@ export const EditPostForm = ({
                       <FieldLabel className="text-sm font-semibold text-muted-foreground">
                         Post Banner
                       </FieldLabel>
-                      <div className="border border-dashed border-gray-400 dark:border-gray-700 rounded-xl p-4 flex items-center justify-center bg-muted/5 hover:bg-muted/10 transition">
-                        <ImageSelector
-                          maxFiles={1}
-                          gridCols={1}
-                          crop={{ shape: "rect", width: 600, height: 300 }}
-                          onChange={async (img) => {
-                            field.onChange(img.url);
-                            return img;
-                          }}
-                          onRemove={async () => field.onChange(undefined)}
-                        />
-                      </div>
+                      <ImageSelector
+                        maxFiles={1}
+                        gridCols={1}
+                        value={
+                          field.value
+                            ? [{ url: field.value, local_id: cryptoRandomId() }]
+                            : undefined
+                        }
+                        crop={{ shape: "rect", width: 600, height: 300 }}
+                        onChange={async (img) => {
+                          field.onChange(img.url);
+                          return img;
+                        }}
+                        onRemove={async () => field.onChange(undefined)}
+                      />
                     </Field>
                   )}
                 />
@@ -277,20 +285,20 @@ export const EditPostForm = ({
               <div className="border border-gray-300 dark:border-gray-700 rounded-xl overflow-hidden shadow-sm">
                 <MarkdownEditor
                   value={form.watch("content")}
-                  onChange={(value) => form.setValue("content", value)}
+                  onChange={(v) => form.setValue("content", v)}
                 />
               </div>
             </div>
           </FieldGroup>
 
-          {/* Submit Button */}
-          <div className="pt-6 flex flex-col sm:flex-row justify-end">
+          {/* Save Button */}
+          <div className="pt-6 flex justify-end">
             <Button
               type="submit"
               disabled={submitting}
-              className="w-full sm:w-auto px-8 py-2 text-base font-medium rounded-md shadow-sm hover:shadow-md transition-all"
+              className="px-8 py-2 text-base font-medium rounded-md shadow-sm hover:shadow-md transition-all"
             >
-              {submitting ? "Uploading..." : "Publish Post"}
+              {submitting ? "Saving..." : "Save"}
             </Button>
           </div>
         </form>

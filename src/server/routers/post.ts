@@ -1,12 +1,13 @@
 import db from "@/db";
 import { publicProcedure, router } from "../trpc";
-import { createPostSchema, posts } from "@/db/schema/post";
+import { createPostSchema, posts, selectPostSchema } from "@/db/schema/post";
 import { z } from "zod/v4";
 import { eq } from "drizzle-orm";
 import { createPost, getBySlug, getPosts, updatePost } from "../services/posts";
 import { TRPCClientError } from "@trpc/client";
 import { TRPCError } from "@trpc/server";
 import { handleDBError } from "../utils/errors/handleDBError";
+import { categories, selectCategorySchema } from "@/db/schema/categories";
 
 /*
 
@@ -19,13 +20,16 @@ export const postRouter = router({
         page: z.number().gt(0).default(0),
         limit: z.number().gte(3).lte(50).default(10),
         search: z.string().max(100).optional(),
+        categories: z.array(z.string()).min(0).optional(),
       }),
     )
     .query(async ({ input }) => {
+      console.log(input);
       const posts = await getPosts({
         page: input.page,
         limit: input.limit,
         search: input.search,
+        categories: input.categories,
       });
       return posts;
     }),
@@ -48,6 +52,7 @@ export const postRouter = router({
         content: true,
         description: true,
         slug: true,
+        published: true,
         banner: true,
         thumbnail: true,
       }),
@@ -69,15 +74,20 @@ export const postRouter = router({
     }),
   update: publicProcedure
     .input(
-      createPostSchema.pick({
-        id: true,
-        title: true,
-        content: true,
-        description: true,
-        slug: true,
-        banner: true,
-        thumbnail: true,
-      }),
+      selectPostSchema
+        .pick({
+          id: true,
+          title: true,
+          content: true,
+          description: true,
+          published: true,
+          slug: true,
+          banner: true,
+          thumbnail: true,
+        })
+        .extend({
+          categories: z.array(selectCategorySchema).min(1).optional(),
+        }),
     )
     .mutation(async ({ input }) => {
       if (!input.id) {
