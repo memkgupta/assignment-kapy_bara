@@ -62,7 +62,7 @@ export const getPosts = async (filters: {
 
   const postMap = new Map<
     string,
-    { post: any; categories: { id: number; name: string; slug: string }[] }
+    { post: Post; categories: { id: number; name: string; slug: string }[] }
   >();
 
   result?.forEach((row) => {

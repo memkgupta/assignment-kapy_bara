@@ -8,6 +8,13 @@
       "when": 1761117086520,
       "tag": "0000_sticky_deathbird",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1761193579054,
+      "tag": "0001_woozy_talkback",
+      "breakpoints": true
     }
   ]
 }

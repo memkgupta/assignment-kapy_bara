@@ -7,16 +7,18 @@ import {
   List,
   ListOrdered,
   Code,
-  Eye,
-  EyeOff,
   Image,
+  Loader2,
   LucideIcon,
 } from "lucide-react";
+import { useImageUpload } from "../common/image-selector/useImageUpload";
+import { toast } from "sonner";
 
 interface ToolbarButton {
   icon: LucideIcon;
   action: () => void;
   label: string;
+  disabled?: boolean;
 }
 
 interface EditorStats {
@@ -33,15 +35,35 @@ const MarkdownEditor = ({
 }) => {
   const [content, setContent] = useState<string>(value);
   const [showPreview, setShowPreview] = useState<boolean>(true);
+  const [image, setImage] = useState<string | null>(null);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const imageUploader = useImageUpload();
+  const ref = useRef<HTMLInputElement>(null);
 
-  const insertMarkdown = (before: string, after: string = ""): void => {
+  const handleImageSelect = async (file: File) => {
+    try {
+      setIsUploadingImage(true);
+      const uploaded = await imageUploader.uploadImage(file);
+      const url = uploaded.url;
+      setImage(url);
+      insertMarkdown(`![alt text](${url})\n`);
+      toast.success("Image uploaded successfully!");
+    } catch (error) {
+      toast.error("Can't upload image");
+    } finally {
+      setIsUploadingImage(false);
+    }
+  };
+
+  const insertMarkdown = (before: string, after: string = "") => {
     const textarea = textareaRef.current;
     if (!textarea) return;
 
     const start = textarea.selectionStart;
     const end = textarea.selectionEnd;
     const selectedText = content.substring(start, end);
+
     const newText =
       content.substring(0, start) +
       before +
@@ -50,9 +72,12 @@ const MarkdownEditor = ({
       content.substring(end);
 
     setContent(newText);
+    onChange(newText);
+
     setTimeout(() => {
       textarea.focus();
-      textarea.setSelectionRange(start + before.length, end + before.length);
+      const cursorPosition = start + before.length + selectedText.length;
+      textarea.setSelectionRange(cursorPosition, cursorPosition);
     }, 0);
   };
 
@@ -82,16 +107,16 @@ const MarkdownEditor = ({
     // Italic
     html = html.replace(/\*(.+?)\*/g, '<em class="italic">$1</em>');
 
-    // Links
-    html = html.replace(
-      /\[([^\]]+)\]\(([^\)]+)\)/g,
-      '<a href="$2" class="text-blue-600 hover:underline">$1</a>',
-    );
-
     // Images
     html = html.replace(
       /!\[([^\]]*)\]\(([^\)]+)\)/g,
       '<img src="$2" alt="$1" class="max-w-full h-auto my-4 rounded" />',
+    );
+
+    // Links
+    html = html.replace(
+      /\[([^\]]+)\]\(([^\)]+)\)/g,
+      '<a href="$2" class="text-blue-600 hover:underline">$1</a>',
     );
 
     // Code blocks
@@ -123,12 +148,10 @@ const MarkdownEditor = ({
     return html;
   };
 
-  const calculateStats = (): EditorStats => {
-    return {
-      characters: content.length,
-      words: content.split(/\s+/).filter((w) => w).length,
-    };
-  };
+  const calculateStats = (): EditorStats => ({
+    characters: content.length,
+    words: content.split(/\s+/).filter(Boolean).length,
+  });
 
   const handleContentChange = (e: ChangeEvent<HTMLTextAreaElement>): void => {
     onChange(e.target.value);
@@ -138,19 +161,24 @@ const MarkdownEditor = ({
   const toolbarButtons: ToolbarButton[] = [
     { icon: Bold, action: () => insertMarkdown("**", "**"), label: "Bold" },
     { icon: Italic, action: () => insertMarkdown("*", "*"), label: "Italic" },
-    { icon: Link, action: () => insertMarkdown("[", "](url)"), label: "Link" },
+    { icon: Link, action: () => insertMarkdown("[text](", ")"), label: "Link" },
     {
       icon: Image,
-      action: () => insertMarkdown("![alt](", ")"),
+      action: () => ref.current?.click(),
       label: "Image",
+      disabled: isUploadingImage,
     },
-    { icon: List, action: () => insertMarkdown("- "), label: "List" },
+    { icon: List, action: () => insertMarkdown("- "), label: "Bullet List" },
     {
       icon: ListOrdered,
       action: () => insertMarkdown("1. "),
-      label: "Ordered List",
+      label: "Numbered List",
     },
-    { icon: Code, action: () => insertMarkdown("`", "`"), label: "Code" },
+    {
+      icon: Code,
+      action: () => insertMarkdown("```\n", "\n```"),
+      label: "Code",
+    },
   ];
 
   const stats = calculateStats();
@@ -159,7 +187,17 @@ const MarkdownEditor = ({
     <div className="min-h-screen bg-gray-50 p-6">
       <div className="max-w-7xl mx-auto">
         <div className="bg-white rounded-lg shadow-lg overflow-hidden">
-          {/* Header */}
+          {/* Hidden Image Input */}
+          <input
+            type="file"
+            disabled={isUploadingImage}
+            onChange={async (e) => {
+              e.target.files && (await handleImageSelect(e.target.files[0]));
+            }}
+            accept="image/*"
+            hidden
+            ref={ref}
+          />
 
           {/* Toolbar */}
           <div className="border-b bg-gray-50 p-3 flex items-center gap-2 flex-wrap">
@@ -167,18 +205,26 @@ const MarkdownEditor = ({
               <button
                 key={idx}
                 onClick={btn.action}
-                className="p-2 hover:bg-gray-200 rounded transition-colors"
+                disabled={btn.disabled}
+                className={`p-2 rounded transition-colors ${
+                  btn.disabled
+                    ? "cursor-not-allowed opacity-50"
+                    : "hover:bg-gray-200 cursor-pointer"
+                }`}
                 title={btn.label}
                 type="button"
               >
-                <btn.icon size={20} className="text-gray-700" />
+                {btn.icon === Image && isUploadingImage ? (
+                  <Loader2 size={20} className="animate-spin text-blue-600" />
+                ) : (
+                  <btn.icon size={20} className="text-gray-700" />
+                )}
               </button>
             ))}
           </div>
 
-          {/* Editor Area */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-0 divide-x">
-            {/* Editor */}
+          {/* Editor + Preview */}
+          <div className="grid grid-cols-1  divide-x">
             <div className="p-6">
               <h2 className="text-lg font-semibold mb-3 text-gray-700">
                 Editor
@@ -186,13 +232,13 @@ const MarkdownEditor = ({
               <textarea
                 ref={textareaRef}
                 value={content}
+                disabled={isUploadingImage}
                 onChange={handleContentChange}
                 className="w-full h-96 p-4 border rounded-lg font-mono text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
                 placeholder="Write your markdown here..."
               />
             </div>
 
-            {/* Preview */}
             {showPreview && (
               <div className="p-6 bg-gray-50">
                 <h2 className="text-lg font-semibold mb-3 text-gray-700">

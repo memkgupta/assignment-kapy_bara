@@ -1,6 +1,7 @@
 import { serverClient } from "@/app/_trpc/server_client";
 import { CursorPagination } from "../utils/PaginationButton";
 import PostCardHorizontal from "../posts/PostCardHorizontal";
+import PostCardVertical from "../posts/PostCardVertical";
 
 export default async function AllPosts({
   searchParams,
@@ -25,11 +26,7 @@ export default async function AllPosts({
 
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
         {posts.map((post) => (
-          <PostCardHorizontal
-            key={post.post.id}
-            data={post}
-            className="hover:shadow-lg transition-shadow duration-300"
-          />
+          <PostCardVertical key={post.post.id} data={post} />
         ))}
       </div>
 

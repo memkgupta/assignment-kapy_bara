@@ -93,11 +93,6 @@ export default function Navbar() {
               <SheetContent side="right" className="w-64 p-6">
                 <div className="flex justify-between items-center mb-6">
                   <span className="text-xl font-bold text-primary">Menu</span>
-                  <SheetTrigger asChild>
-                    <Button variant="ghost" className="p-2">
-                      <X className="h-5 w-5" />
-                    </Button>
-                  </SheetTrigger>
                 </div>
                 <div className="flex flex-col space-y-4">
                   <Link

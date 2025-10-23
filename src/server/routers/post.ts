@@ -47,15 +47,19 @@ export const postRouter = router({
     }),
   create: publicProcedure
     .input(
-      createPostSchema.pick({
-        title: true,
-        content: true,
-        description: true,
-        slug: true,
-        published: true,
-        banner: true,
-        thumbnail: true,
-      }),
+      createPostSchema
+        .pick({
+          title: true,
+          content: true,
+          description: true,
+          slug: true,
+          published: true,
+          banner: true,
+          thumbnail: true,
+        })
+        .extend({
+          categories: z.array(selectCategorySchema).min(1),
+        }),
     )
     .mutation(async ({ input }) => {
       try {

@@ -18,7 +18,8 @@ export const posts = pgTable("posts", {
   banner: varchar("banner"),
   slug: varchar("slug", { length: 200 }).notNull().unique(),
   published: boolean("published").default(true),
-  createdAt: timestamp("created_at").defaultNow(),
+  publishedAt: timestamp("published_at"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
 export const createPostSchema = createInsertSchema(posts);
