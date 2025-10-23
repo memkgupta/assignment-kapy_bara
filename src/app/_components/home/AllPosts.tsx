@@ -2,6 +2,8 @@ import { serverClient } from "@/app/_trpc/server_client";
 import { CursorPagination } from "../utils/PaginationButton";
 import PostCardHorizontal from "../posts/PostCardHorizontal";
 import PostCardVertical from "../posts/PostCardVertical";
+import { isArray } from "util";
+import { categories } from "@/db/schema/categories";
 
 export default async function AllPosts({
   searchParams,
@@ -15,7 +17,11 @@ export default async function AllPosts({
     page,
     limit,
     search: searchParams.search,
-    categories: Array.from(searchParams.categories ?? []),
+    categories: Array.isArray(searchParams.categories)
+      ? searchParams.categories
+      : searchParams.categories
+        ? [searchParams.categories]
+        : [],
   });
 
   return (

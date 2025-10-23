@@ -59,6 +59,7 @@ export const postRouter = router({
         })
         .extend({
           categories: z.array(selectCategorySchema).min(1),
+          slug: z.string().optional(),
         }),
     )
     .mutation(async ({ input }) => {

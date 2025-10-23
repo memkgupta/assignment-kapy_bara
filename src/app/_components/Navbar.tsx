@@ -26,7 +26,10 @@ export default function Navbar() {
         <div className="flex justify-between h-16 items-center">
           {/* Logo */}
           <div className="flex-shrink-0">
-            <Link href="/" className="text-xl font-bold text-primary">
+            <Link
+              href="/"
+              className="text-xl font-bold bg-gradient-to-b from-blue-500 via-purple-500 to-pink-500 bg-clip-text text-transparent"
+            >
               MyBlog
             </Link>
           </div>
@@ -34,7 +37,7 @@ export default function Navbar() {
           {/* Desktop Links */}
           <div className="hidden md:flex space-x-4 items-center">
             <Link
-              href="/"
+              href="/home"
               className="text-gray-700 dark:text-gray-200 hover:text-primary"
             >
               Home
@@ -96,7 +99,7 @@ export default function Navbar() {
                 </div>
                 <div className="flex flex-col space-y-4">
                   <Link
-                    href="/"
+                    href="/home"
                     className="text-gray-700 dark:text-gray-200 hover:text-primary"
                   >
                     Home

@@ -4,6 +4,7 @@ import Image from "next/image";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeHighlight from "rehype-highlight";
+import { renderMarkdown } from "@/lib/utils";
 export default async function PostPage({
   params,
 }: {
@@ -15,72 +16,7 @@ export default async function PostPage({
       month: "long",
       day: "numeric",
     });
-  const renderMarkdown = (text: string): string => {
-    let html = text;
 
-    // Headers
-    html = html.replace(
-      /^### (.*$)/gim,
-      '<h3 class="text-xl font-bold mt-4 mb-2">$1</h3>',
-    );
-    html = html.replace(
-      /^## (.*$)/gim,
-      '<h2 class="text-2xl font-bold mt-6 mb-3">$1</h2>',
-    );
-    html = html.replace(
-      /^# (.*$)/gim,
-      '<h1 class="text-3xl font-bold mt-8 mb-4">$1</h1>',
-    );
-
-    // Bold
-    html = html.replace(
-      /\*\*(.+?)\*\*/g,
-      '<strong class="font-bold">$1</strong>',
-    );
-
-    // Italic
-    html = html.replace(/\*(.+?)\*/g, '<em class="italic">$1</em>');
-
-    // Links
-    html = html.replace(
-      /\[([^\]]+)\]\(([^\)]+)\)/g,
-      '<a href="$2" class="text-blue-600 hover:underline">$1</a>',
-    );
-
-    // Images
-    html = html.replace(
-      /!\[([^\]]*)\]\(([^\)]+)\)/g,
-      '<img src="$2" alt="$1" class="max-w-full h-auto my-4 rounded" />',
-    );
-
-    // Code blocks
-    html = html.replace(
-      /```(\w+)?\n([\s\S]*?)```/g,
-      '<pre class="bg-gray-800 text-gray-100 p-4 rounded my-4 overflow-x-auto"><code>$2</code></pre>',
-    );
-
-    // Inline code
-    html = html.replace(
-      /`(.+?)`/g,
-      '<code class="bg-gray-200 px-2 py-1 rounded text-sm">$1</code>',
-    );
-
-    // Unordered lists
-    html = html.replace(/^\- (.+)$/gim, '<li class="ml-6">$1</li>');
-    html = html.replace(
-      /(<li class="ml-6">.*<\/li>)/s,
-      '<ul class="list-disc my-2">$1</ul>',
-    );
-
-    // Ordered lists
-    html = html.replace(/^\d+\. (.+)$/gim, '<li class="ml-6">$1</li>');
-
-    // Line breaks
-    html = html.replace(/\n\n/g, '</p><p class="mb-4">');
-    html = '<p class="mb-4">' + html + "</p>";
-
-    return html;
-  };
   const { slug } = await params;
   const post = await serverClient.posts.bySlug({ slug: slug });
   console.log(post);
@@ -112,9 +48,9 @@ export default async function PostPage({
           </div>
         )}
         {description && (
-          <p className="text-base md:text-lg text-muted-foreground mt-2 max-w-2xl mx-auto">
-            {description}
-          </p>
+          <div className="text-base md:text-lg text-muted-foreground mt-2 max-w-2xl mx-auto break-words whitespace-normal">
+            <p>{description}</p>
+          </div>
         )}
       </header>
 

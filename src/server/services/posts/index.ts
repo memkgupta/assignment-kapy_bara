@@ -8,6 +8,7 @@ import { TRPCError } from "@trpc/server";
 
 import { lt, desc, eq, ilike, lte, and, inArray } from "drizzle-orm";
 import { z } from "zod/v4";
+import { generateUniqueSlug } from "./utils";
 
 export const getPosts = async (filters: {
   search?: string;
@@ -15,94 +16,105 @@ export const getPosts = async (filters: {
   limit: number;
   categories?: string[];
 }) => {
-  const { search, page, limit } = filters;
+  const { search, page, limit, categories: categoryFilter } = filters;
+  const offset = (page - 1) * limit;
   const realLimit = limit + 1;
-  let cursorCreatedAt: Date | null = null;
-
-  if (page > 1) {
-    const offset = (page - 1) * limit;
-    const prevCursorQuery = await db
-      .select({ createdAt: posts.createdAt })
-      .from(posts)
-      .orderBy(desc(posts.createdAt))
-      .limit(1)
-      .offset(offset - 1); // Get the last item from previous page
-
-    if (prevCursorQuery.length > 0) {
-      cursorCreatedAt = prevCursorQuery[0].createdAt;
-    }
-  }
 
   const whereConditions = [];
 
   if (search && search.length > 1) {
     whereConditions.push(ilike(posts.title, `%${search}%`));
   }
-
-  if (cursorCreatedAt) {
-    whereConditions.push(lt(posts.createdAt, cursorCreatedAt));
-  }
-
-  let baseQuery = db
+  let query = db
     .select()
     .from(posts)
-    .leftJoin(postCategories, eq(posts.id, postCategories.postId))
-    .leftJoin(categories, eq(postCategories.categoryId, categories.id))
-    .orderBy(desc(posts.createdAt))
-    .limit(realLimit);
+    .leftJoin(postCategories, eq(postCategories.postId, posts.id))
+    .leftJoin(categories, eq(categories.id, postCategories.categoryId));
 
-  if (filters.categories && filters.categories.length > 0) {
-    whereConditions.push(inArray(categories.slug, filters.categories));
+  if (search && search.length > 1) {
+    whereConditions.push(ilike(posts.title, `%${search}%`));
   }
+
+  if (categoryFilter && categoryFilter.length > 0) {
+    whereConditions.push(inArray(categories.slug, categoryFilter));
+  }
+
   if (whereConditions.length > 0) {
-    baseQuery = baseQuery.where(and(...whereConditions)) as any;
+    query = query.where(and(...whereConditions)) as any;
   }
 
-  const result = await baseQuery;
+  const filteredPosts = await query
+    .orderBy(desc(posts.createdAt))
+    .limit(realLimit)
+    .offset(offset);
+  const postIds = filteredPosts.map((p) => p.posts.id);
 
-  const postMap = new Map<
-    string,
-    { post: Post; categories: { id: number; name: string; slug: string }[] }
-  >();
+  const postCategoriesData =
+    postIds.length > 0
+      ? await db
+          .select({
+            postId: postCategories.postId,
+            categoryId: categories.id,
+            categoryName: categories.name,
+            categorySlug: categories.slug,
+          })
+          .from(postCategories)
+          .innerJoin(categories, eq(postCategories.categoryId, categories.id))
+          .where(inArray(postCategories.postId, postIds))
+      : [];
 
-  result?.forEach((row) => {
-    if (!postMap.has(row.posts.id)) {
-      postMap.set(row.posts.id, { post: row.posts, categories: [] });
-    }
-    if (row.categories?.id) {
-      postMap.get(row.posts.id)?.categories.push({
-        id: row.categories.id,
-        name: row.categories.name,
-        slug: row.categories.slug,
+  // const categoryMap = new Map<
+  //   string,
+  //   { id: number; name: string; slug: string }[]
+  // >();
+  // postCategoriesData.forEach((pc) => {
+  //   if (!categoryMap.has(pc.postId)) {
+  //     categoryMap.set(pc.postId, []);
+  //   }
+  //   categoryMap.get(pc.postId)!.push({
+  //     id: pc.categoryId,
+  //     name: pc.categoryName,
+  //     slug: pc.categorySlug,
+  //   });
+  // });
+
+  const postsWithCategories = new Map<string, PostWithCategories>();
+  filteredPosts.slice(0, limit).forEach((post) => {
+    if (!postsWithCategories.has(post.posts.id)) {
+      postsWithCategories.set(post.posts.id, {
+        post: post.posts,
+        categories: post.categories != null ? [post.categories] : [],
       });
+    } else if (post.categories != null) {
+      postsWithCategories.get(post.posts.id)?.categories.push(post.categories);
     }
   });
 
-  const _posts = Array.from(postMap.values());
-
   // Pagination metadata
-  let hasNext = false;
-  if (_posts.length > limit) {
-    hasNext = true;
-    _posts.pop();
-  }
-
-  const prev = page > 1 ? page - 1 : null;
-  const next = hasNext ? page + 1 : null;
+  const hasNext = filteredPosts.length > limit;
+  const prev = page > 1 ? page - 1 : -1;
+  const next = hasNext ? page + 1 : -1;
 
   return {
-    posts: _posts,
+    posts: Array.from(postsWithCategories.values()),
     prev,
     next,
   };
 };
 export const createPost = async (
-  data: CreatePostType & { categories: Category[] },
+  data: Omit<CreatePostType, "slug"> &
+    Partial<Pick<CreatePostType, "slug">> & { categories: Category[] },
 ) => {
   try {
     return await db.transaction(async (tx) => {
       // Insert the post
-      const [post] = await tx.insert(posts).values(data).returning();
+      if (!data.slug) {
+        data.slug = generateUniqueSlug(data.title);
+      }
+      const [post] = await tx
+        .insert(posts)
+        .values(data as CreatePostType)
+        .returning();
       const categ_slugs = data.categories.map((c) => c.slug);
 
       // Get category IDs from slugs

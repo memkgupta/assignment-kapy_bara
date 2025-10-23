@@ -28,7 +28,7 @@ export const CreatePostForm = ({ categories }: { categories: Category[] }) => {
   const formSchema = createPostSchema.extend({
     description: z.string().min(100).optional(),
     title: z.string().min(20),
-    slug: z.string().min(20).optional(),
+    slug: z.string().optional(),
     thumbnail: z.string().optional(),
     banner: z.string().optional(),
     categories: z.array(selectCategorySchema).min(1),
@@ -39,7 +39,7 @@ export const CreatePostForm = ({ categories }: { categories: Category[] }) => {
     defaultValues: {
       title: "",
       description: "",
-      slug: "",
+
       content: "",
       categories: [],
     },
@@ -80,7 +80,7 @@ export const CreatePostForm = ({ categories }: { categories: Category[] }) => {
     try {
       await createPostMutation.mutateAsync({
         content: data.content,
-        slug: data.slug ?? "",
+        slug: data.slug,
         categories: data.categories,
         title: data.title,
         banner: data.banner,
