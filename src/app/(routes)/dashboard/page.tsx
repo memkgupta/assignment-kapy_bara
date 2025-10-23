@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import Image from "next/image";
 import { Pencil, Trash2, Plus, FileText } from "lucide-react";
+import { CursorPagination } from "@/app/_components/utils/PaginationButton";
 
 export default async function Dashboard({
   searchParams,
@@ -11,8 +12,8 @@ export default async function Dashboard({
 }) {
   // Fetch user posts
   let { page } = await searchParams;
-  page = Number(page ?? 0);
-  const { posts } = await serverClient.posts.all({ page: page });
+  page = Number(page ?? 1);
+  const { posts, prev, next } = await serverClient.posts.all({ page: page });
 
   const totalPosts = posts.length;
   const published = posts.filter((p) => p.post.published).length;
@@ -142,6 +143,7 @@ export default async function Dashboard({
                 ))}
               </tbody>
             </table>
+            <CursorPagination prev={prev} next={next} />
           </div>
         )}
       </div>
