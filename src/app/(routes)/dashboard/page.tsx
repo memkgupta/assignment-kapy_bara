@@ -10,8 +10,8 @@ export default async function Dashboard({
   searchParams: Promise<{ page?: number }>;
 }) {
   // Fetch user posts
-  const { page } = await searchParams;
-
+  let { page } = await searchParams;
+  page = Number(page ?? 0);
   const { posts } = await serverClient.posts.all({ page: page });
 
   const totalPosts = posts.length;
