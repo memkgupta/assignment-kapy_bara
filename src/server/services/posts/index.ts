@@ -63,21 +63,6 @@ export const getPosts = async (filters: {
           .where(inArray(postCategories.postId, postIds))
       : [];
 
-  // const categoryMap = new Map<
-  //   string,
-  //   { id: number; name: string; slug: string }[]
-  // >();
-  // postCategoriesData.forEach((pc) => {
-  //   if (!categoryMap.has(pc.postId)) {
-  //     categoryMap.set(pc.postId, []);
-  //   }
-  //   categoryMap.get(pc.postId)!.push({
-  //     id: pc.categoryId,
-  //     name: pc.categoryName,
-  //     slug: pc.categorySlug,
-  //   });
-  // });
-
   const postsWithCategories = new Map<string, PostWithCategories>();
   filteredPosts.slice(0, limit).forEach((post) => {
     if (!postsWithCategories.has(post.posts.id)) {

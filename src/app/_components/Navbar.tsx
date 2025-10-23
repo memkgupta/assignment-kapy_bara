@@ -30,7 +30,7 @@ export default function Navbar() {
               href="/"
               className="text-xl font-bold bg-gradient-to-b from-blue-500 via-purple-500 to-pink-500 bg-clip-text text-transparent"
             >
-              MyBlog
+              BlogFlow
             </Link>
           </div>
 
