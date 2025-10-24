@@ -9,10 +9,6 @@ import { TRPCError } from "@trpc/server";
 import { handleDBError } from "../utils/errors/handleDBError";
 import { categories, selectCategorySchema } from "@/db/schema/categories";
 
-/*
-
-Todo extract the functions into separate service and make routes paginated
-*/
 export const postRouter = router({
   all: publicProcedure
     .input(
@@ -24,7 +20,6 @@ export const postRouter = router({
       }),
     )
     .query(async ({ input }) => {
-      console.log(input);
       const posts = await getPosts({
         page: input.page,
         limit: input.limit,
