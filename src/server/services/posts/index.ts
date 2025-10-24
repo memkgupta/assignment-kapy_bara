@@ -169,17 +169,19 @@ export const updatePost = async (
             ),
           ),
         );
-
-        await tx
-          .insert(postCategories)
-          .values(
-            n_categs.map((c) => ({ postId: updated.id, categoryId: c.id })),
-          );
+        if (n_categs.length > 0) {
+          await tx
+            .insert(postCategories)
+            .values(
+              n_categs.map((c) => ({ postId: updated.id, categoryId: c.id })),
+            );
+        }
       }
 
       return updated;
     });
   } catch (error: any) {
+    console.log(error);
     if (error.code) {
       handleDBError(error);
     } else {
